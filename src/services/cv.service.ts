@@ -21,6 +21,7 @@ class CvService {
       const newCv = await this.cvRepository["prisma"].cv.create({
         data: {
           appliedJob,
+          name: parsed.name,
           educations: parsed.educations,
           profesionalExperiences: parsed.profesionalExperiences,
           technicalSkills: parsed.technicalSkills,

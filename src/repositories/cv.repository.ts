@@ -20,6 +20,8 @@ class CvRepository {
       .map((l) => l.trim())
       .filter(Boolean);
 
+    const name = lines[0] || "Unknown";
+
     const educationSectionMatch = text.match(
       /(Education\s*&?\s*Certification|Educational Details|Education)[:\s\n]*([\s\S]*?)(?=\n[A-Z][A-Za-z\s&]+:|\n\n|Technical Skills|Professional Experience|Chronological Summary of Experience|Work Experience)/i
     );
@@ -67,6 +69,7 @@ class CvRepository {
     }
 
     return {
+      name,
       educations,
       technicalSkills: skills,
       profesionalExperiences: experiences,

@@ -16,7 +16,7 @@ datasource db {
 model Cv {
   id Int @id @default(autoincrement())
   appliedJob String
-  // name String
+  name String
   // jobTitle String
   educations Json
   technicalSkills Json

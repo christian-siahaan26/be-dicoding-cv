@@ -5,7 +5,8 @@ import { JsonValue } from "@prisma/client/runtime/library";
 class Cv {
   private id: number;
   private appliedJob: string;
-  // private name: string;
+  private name: string;
+  // private jobTitle: string;
   private educations: JsonValue;
   private technicalSkills: JsonValue;
   private profesionalExperience: JsonValue;
@@ -16,7 +17,8 @@ class Cv {
   constructor(
     id: number,
     appliedJob: string,
-    // name: string,
+    name: string,
+    // jobTitle: string,
     educations: JsonValue,
     technicalSkills: JsonValue,
     profesionalExperience: JsonValue,
@@ -26,7 +28,8 @@ class Cv {
   ) {
     this.id = id;
     this.appliedJob = appliedJob;
-    // this.name = name;
+    this.name = name;
+    // this.jobTitle = jobTitle;
     this.educations = educations;
     this.technicalSkills = technicalSkills;
     this.profesionalExperience = profesionalExperience;
@@ -39,7 +42,8 @@ class Cv {
     return new Cv(
       prismaCv.id,
       prismaCv.appliedJob,
-      // prismaCv.name,
+      prismaCv.name,
+      // prismaCv.jobTitle,
       prismaCv.educations,
       prismaCv.technicalSkills,
       prismaCv.profesionalExperiences,
@@ -53,7 +57,8 @@ class Cv {
     return {
       id: this.id,
       appliedJob: this.appliedJob,
-      // name: this.name,
+      name: this.name,
+      // jobTitle: this.jobTitle,
       educations: this.educations,
       technicalSkills: this.technicalSkills,
       profesionalExperience: this.profesionalExperience,
