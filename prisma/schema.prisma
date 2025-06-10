@@ -17,11 +17,14 @@ model Cv {
   id Int @id @default(autoincrement())
   appliedJob String
   name String
-  // jobTitle String
+  jobTitle String
   educations Json
-  technicalSkills Json
-  profesionalExperiences Json
+  skills Json
+  experiences Json
+  parseText String
   matchScore Float?
+  jobRecommendation Json?
+  fixCv Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   isDeleted Boolean @default(false)

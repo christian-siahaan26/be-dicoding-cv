@@ -6,11 +6,14 @@ class Cv {
   private id: number;
   private appliedJob: string;
   private name: string;
-  // private jobTitle: string;
+  private jobTitle: string;
   private educations: JsonValue;
-  private technicalSkills: JsonValue;
-  private profesionalExperience: JsonValue;
+  private skills: JsonValue;
+  private experiences: JsonValue;
+  private parseText: string;
   private matchScore: number | null;
+  private jobRecommendation: JsonValue | null;
+  private fixCv: JsonValue | null;
   private createdAt: Date; 
   private updatedAt: Date;
 
@@ -18,22 +21,28 @@ class Cv {
     id: number,
     appliedJob: string,
     name: string,
-    // jobTitle: string,
+    jobTitle: string,
     educations: JsonValue,
-    technicalSkills: JsonValue,
-    profesionalExperience: JsonValue,
+    skills: JsonValue,
+    experiences: JsonValue,
+    parseText: string,
     matchScore: number | null,
+    jobRecommendation: JsonValue | null,
+    fixCv: JsonValue |null,
     createdAt: Date,
     updatedAt: Date
   ) {
     this.id = id;
     this.appliedJob = appliedJob;
     this.name = name;
-    // this.jobTitle = jobTitle;
+    this.jobTitle = jobTitle;
     this.educations = educations;
-    this.technicalSkills = technicalSkills;
-    this.profesionalExperience = profesionalExperience;
+    this.skills = skills;
+    this.experiences = experiences;
+    this.parseText = parseText;
     this.matchScore = matchScore;
+    this.jobRecommendation = jobRecommendation;
+    this.fixCv = fixCv;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }
@@ -43,11 +52,14 @@ class Cv {
       prismaCv.id,
       prismaCv.appliedJob,
       prismaCv.name,
-      // prismaCv.jobTitle,
+      prismaCv.jobTitle,
       prismaCv.educations,
-      prismaCv.technicalSkills,
-      prismaCv.profesionalExperiences,
+      prismaCv.skills,
+      prismaCv.experiences,
+      prismaCv.parseText,
       prismaCv.matchScore,
+      prismaCv.jobRecommendation,
+      prismaCv.fixCv,
       prismaCv.createdAt,
       prismaCv.updatedAt
     );
@@ -58,11 +70,14 @@ class Cv {
       id: this.id,
       appliedJob: this.appliedJob,
       name: this.name,
-      // jobTitle: this.jobTitle,
+      jobTitle: this.jobTitle,
       educations: this.educations,
-      technicalSkills: this.technicalSkills,
-      profesionalExperience: this.profesionalExperience,
+      skills: this.skills,
+      experiences: this.experiences,
+      parseText: this.parseText,
       matchScore: this.matchScore,
+      jobRecommendation: this.jobRecommendation,
+      fixCv: this.fixCv,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };

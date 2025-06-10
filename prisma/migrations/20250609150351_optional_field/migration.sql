@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "cvs" ALTER COLUMN "fixCv" DROP NOT NULL,
+ALTER COLUMN "jobRecommendation" DROP NOT NULL,
+ALTER COLUMN "parseText" DROP NOT NULL;

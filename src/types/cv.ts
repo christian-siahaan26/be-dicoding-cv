@@ -4,11 +4,14 @@ export type Cv = {
   id: number;
   appliedJob: string;
   name: string;
-  // jobTitle: string;
+  jobTitle: string;
   educations: JsonValue;
   skills: JsonValue;
-  profesionalExperience: JsonValue;
+  experiences: JsonValue;
+  parseText: string;
   matchScore: number | null;
+  jobRecommendation: JsonValue | null;
+  fixCv: JsonValue | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -16,11 +19,14 @@ export type Cv = {
 export type CreateCvDto = {
   appliedJob: string;
   name: string;
-  // jobTitle: string;
+  jobTitle: string;
   educations: JsonValue;
   skills: JsonValue;
-  profesionalExperience: JsonValue;
+  experiences: JsonValue;
+  parseText: string;
   matchScore: number | null;
+  jobRecommendation: JsonValue | null;
+  fixCv: JsonValue | null;
   email: string;
 };
 
