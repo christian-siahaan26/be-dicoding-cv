@@ -13,6 +13,28 @@ dotenv.config();
 
 const app = express();
 
+const { GoogleAuth } = require('google-auth-library');
+
+let auth;
+
+if (process.env.NODE_ENV === 'production') {
+  // Production: gunakan environment variable JSON
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+    auth = new GoogleAuth({
+      credentials: credentials,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
+  } else {
+    throw new Error('Missing GOOGLE_APPLICATION_CREDENTIALS_JSON in production');
+  }
+} else {
+  // Development: gunakan file path (seperti sekarang)
+  auth = new GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+}
+
 app.use(logger("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
