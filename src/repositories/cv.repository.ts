@@ -3,9 +3,9 @@ import Cv from "../models/cv.model";
 import { CreateCvDto, UpdateCvDto, CvFilters } from "../types/cv";
 import { PaginationParams } from "../types/pagination";
 import { getErrorMessage } from "../utils/error";
-import fs from "fs";
+import fs from "fs"; // Tetap dibutuhkan jika ada logika lain yang melibatkan fs, tapi tidak untuk kredensial
 import pdf from "pdf-parse";
-import { geminiModel } from "../utils/vertexClient";
+import { getGeminiModel } from "../utils/vertexClient"; // Import fungsi getter
 
 class CvRepository {
   private prisma: PrismaClient;
@@ -15,143 +15,150 @@ class CvRepository {
   }
 
   private async parseWithGemini(text: string) {
-    // ✅ Improved prompt with better structure and examples
-    const prompt = `You are an expert CV/Resume parser. Extract information from the following CV text and return ONLY a valid JSON object.
+    const geminiModel = getGeminiModel(); // Ambil model yang sudah diinisialisasi di sini
 
-EXTRACTION RULES:
-1. Extract the person's full name (usually at the top)
-2. Identify current job title or desired position
-3. List ALL technical skills, programming languages, tools mentioned
-4. Extract ALL work experiences including projects and internships
-5. Extract ALL educational background
-6. Be thorough and accurate
+    // ✅ Prompt yang ditingkatkan dengan struktur dan instruksi yang lebih baik
+    const prompt = `Anda adalah seorang ahli CV/Resume parser. Ekstrak informasi dari teks CV berikut dan kembalikan HANYA objek JSON yang valid.
 
-REQUIRED JSON FORMAT:
+ATURAN EKSTRAKSI:
+1. Ekstrak nama lengkap kandidat (biasanya di bagian atas).
+2. Identifikasi judul pekerjaan (job title) saat ini atau posisi yang diinginkan dari bagian objektif/ringkasan atau peran terbaru. Gunakan "Not specified" jika tidak ada judul yang jelas dapat disimpulkan.
+3. Daftar SEMUA keahlian teknis, bahasa pemrograman, alat, dan perangkat lunak relevan yang disebutkan sebagai array string datar.
+4. Ekstrak SEMUA pengalaman kerja, termasuk proyek, magang, dan pekerjaan freelance.
+5. Ekstrak SEMUA entri latar belakang pendidikan.
+6. Lakukan ekstraksi secara menyeluruh dan akurat.
+7. JANGAN sertakan judul bagian (misalnya, "EXPERIENCE", "SKILLS", "EDUCATION", "PROJECTS") sebagai entri data aktual dalam JSON.
+
+FORMAT JSON YANG DIBUTUHKAN:
 {
-  "name": "Full Name Here",
-  "jobTitle": "Current or Desired Job Title",
+  "name": "Nama Lengkap Di Sini",
+  "jobTitle": "Judul Pekerjaan Saat Ini atau Yang Diinginkan",
   "educations": [
     {
-      "institution": "School/University Name",
-      "degree": "Degree/Program Name", 
-      "duration": "Start - End Date",
-      "details": "Additional info like GPA, location, etc"
+      "institution": "Nama Sekolah/Universitas",
+      "degree": "Nama Gelar/Program (misal: Sarjana Sains, S.Kom, MBA)", 
+      "duration": "Tanggal Mulai - Tanggal Selesai (misal: September 2022 - 2026, 2020 - Sekarang)",
+      "details": "Informasi tambahan seperti IPK, lokasi, pencapaian spesifik (sebagai satu string atau null)"
     }
   ],
-  "technicalSkills": ["Python", "JavaScript", "SQL", "Excel", "etc"],
+  "technicalSkills": ["Keahlian 1", "Keahlian 2", "Keahlian N"],
   "profesionalExperiences": [
     {
-      "company": "Company/Organization Name",
-      "role": "Position/Role Title",
-      "duration": "Start - End Date",
-      "description": "Key responsibilities and achievements"
+      "company": "Nama Perusahaan/Organisasi",
+      "role": "Judul Posisi/Peran",
+      "duration": "Tanggal Mulai - Tanggal Selesai (misal: Februari 2025 – Sekarang, Agustus 2024 – Oktober 2024)",
+      "description": "Tanggung jawab dan pencapaian utama dalam peran ini (sebagai satu string ringkas)"
     }
   ]
 }
 
-CV TEXT TO ANALYZE:
+TEKS CV UNTUK DIANALISIS:
 ${text}
 
-IMPORTANT: 
-- Return ONLY the JSON object
-- NO markdown formatting (no \`\`\`json)
-- NO additional explanations
-- Extract ALL information found in the text
-- Use "Not specified" only if information is truly missing
+PENTING: 
+- Kembalikan HANYA objek JSON.
+- TIDAK ADA format markdown (misal: tanpa \`\`\`json).
+- TIDAK ADA penjelasan tambahan atau teks percakapan.
+- Ekstrak SEMUA informasi yang ditemukan dalam teks untuk field yang ditentukan.
+- Gunakan "Not specified" hanya jika informasi benar-benar tidak ada untuk field string.
+- Untuk field array (educations, technicalSkills, profesionalExperiences), kembalikan array kosong [] jika tidak ada entri yang ditemukan.
 
-JSON Response:`;
+Respons JSON:`;
 
     let textResponse: string | undefined = undefined;
 
     try {
-      // ✅ Better generation config for parsing tasks
       const result = await geminiModel.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.1, // Low temperature for consistent parsing
-          topP: 0.8,
-          topK: 40,
-          maxOutputTokens: 2048,
-        },
+        // generationConfig sudah diatur di vertexClient.ts, tidak perlu diulang
       });
 
       const candidates = result.response.candidates;
       textResponse = candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!textResponse) {
-        throw new Error("No text response from Gemini");
+        throw new Error("Tidak ada respons teks dari Gemini.");
       }
 
-      console.log('=== RAW GEMINI RESPONSE ===');
+      console.log('=== RESPON MENTAH DARI GEMINI ===');
       console.log(textResponse);
 
-      // ✅ Better response cleaning
+      // ✅ Pembersihan respons yang lebih baik
       let cleanResponse = textResponse.trim();
       
-      // Remove any markdown formatting
+      // Hapus format markdown
       cleanResponse = cleanResponse.replace(/```json\s*/g, '');
       cleanResponse = cleanResponse.replace(/```\s*/g, '');
       cleanResponse = cleanResponse.replace(/^```/g, '');
       cleanResponse = cleanResponse.replace(/```$/g, '');
       
-      // Remove any explanatory text before/after JSON
+      // Hapus teks penjelasan sebelum/sesudah JSON
       const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
+      if (jsonMatch && jsonMatch[0]) {
         cleanResponse = jsonMatch[0];
+      } else {
+        console.warn('Tidak ada objek JSON yang ditemukan dalam respons Gemini setelah pembersihan. Mencoba parsing teks mentah.');
       }
 
-      console.log('=== CLEANED RESPONSE ===');
+      console.log('=== RESPON DIBERSIHKAN ===');
       console.log(cleanResponse);
 
-      // ✅ Parse JSON with better error handling
+      // ✅ Parsing JSON dengan penanganan error yang lebih baik
       const parsedData = JSON.parse(cleanResponse);
       
-      console.log('=== PARSED DATA ===');
+      console.log('=== DATA YANG DI-PARSE ===');
       console.log(JSON.stringify(parsedData, null, 2));
 
-      // ✅ Enhanced validation and normalization
+      // ✅ Validasi dan normalisasi yang ditingkatkan
+      // Pemetaan sesuai dengan field yang diminta Gemini di prompt Anda
       const validatedData = {
-        name: this.validateAndCleanString(parsedData.name) || "Parse Error - Manual Review Required",
+        name: this.validateAndCleanString(parsedData.name) || "Error Parsing - Perlu Review Manual",
         jobTitle: this.validateAndCleanString(parsedData.jobTitle) || "Not specified",
         educations: this.validateEducations(parsedData.educations),
         technicalSkills: this.validateSkills(parsedData.technicalSkills),
         profesionalExperiences: this.validateExperiences(parsedData.profesionalExperiences),
-        parseText: text,
+        parseText: text, // Simpan teks yang diparsing sebagai bagian dari data
+        matchScore: null, // Gemini tidak mengekstrak ini, jadi default null
+        jobRecommendation: null, // Gemini tidak mengekstrak ini, jadi default null
+        fixCv: null, // Gemini tidak mengekstrak ini, jadi default null
       };
 
-      console.log('=== FINAL VALIDATED DATA ===');
+      console.log('=== DATA AKHIR YANG DIVALIDASI ===');
       console.log(JSON.stringify(validatedData, null, 2));
 
       return validatedData;
 
     } catch (error) {
-      console.error('=== PARSING ERROR ===');
+      console.error('=== ERROR PARSING ===');
       console.error('Error:', error);
-      console.error('Raw response:', textResponse || "No response received");
+      console.error('Respons Mentah:', textResponse || "Tidak ada respons diterima");
       
-      // ✅ Try manual parsing as fallback
-      console.log('=== ATTEMPTING MANUAL PARSING ===');
+      // ✅ Coba parsing manual sebagai fallback
+      console.log('=== MENCOBA PARSING MANUAL SEBAGAI FALLBACK ===');
       const manualParsed = this.manualParseCV(text);
       
-      if (manualParsed.name !== "Parse Error - Manual Review Required") {
-        console.log('Manual parsing successful');
+      if (manualParsed.name !== "Error Parsing - Perlu Review Manual") {
+        console.log('Parsing manual fallback berhasil.');
         return manualParsed;
       }
       
-      // Final fallback
+      // Fallback terakhir jika kedua metode gagal
       return {
-        name: "Parse Error - Manual Review Required",
+        name: "Error Parsing - Perlu Review Manual",
         jobTitle: "Not specified",
         educations: [],
         technicalSkills: [],
         profesionalExperiences: [],
         parseText: text,
+        matchScore: null, // Tambahkan properti ini
+        jobRecommendation: null, // Tambahkan properti ini
+        fixCv: null, // Tambahkan properti ini
         error: error instanceof Error ? error.message : String(error)
       };
     }
   }
 
-  // ✅ Helper validation methods
+  // ✅ Metode validasi helper (tetap sama)
   private validateAndCleanString(value: any): string | null {
     if (typeof value === 'string' && value.trim().length > 0) {
       return value.trim();
@@ -165,7 +172,7 @@ JSON Response:`;
     return skills
       .filter(skill => typeof skill === 'string' && skill.trim().length > 0)
       .map(skill => skill.trim())
-      .filter((skill, index, arr) => arr.indexOf(skill) === index); // Remove duplicates
+      .filter((skill, index, arr) => arr.indexOf(skill) === index); // Hapus duplikat
   }
 
   private validateEducations(educations: any): any[] {
@@ -190,28 +197,30 @@ JSON Response:`;
     }));
   }
 
-  // ✅ Manual parsing fallback using regex patterns
+  // ✅ Parsing manual fallback (tetap sama)
   private manualParseCV(text: string) {
-    console.log('Starting manual CV parsing...');
+    console.log('Memulai parsing CV manual...');
     
     const result = {
-      name: "Parse Error - Manual Review Required",
+      name: "Error Parsing - Perlu Review Manual",
       jobTitle: "Not specified", 
       educations: [] as any[],
       technicalSkills: [] as string[],
       profesionalExperiences: [] as any[],
-      parseText: text
+      parseText: text,
+      matchScore: null,
+      jobRecommendation: null,
+      fixCv: null,
     };
 
     try {
-      // Extract name (first line with capital letters)
+      // Logika regex yang sudah ada
       const nameMatch = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/m);
       if (nameMatch) {
         result.name = nameMatch[1].trim();
-        console.log('Found name:', result.name);
+        console.log('Nama ditemukan:', result.name);
       }
 
-      // Extract skills from SKILLS section
       const skillsMatch = text.match(/SKILLS?\s*\n([\s\S]*?)(?=\n[A-Z]{3,}|$)/i);
       if (skillsMatch) {
         const skillsText = skillsMatch[1];
@@ -219,17 +228,15 @@ JSON Response:`;
           .split(/[,\n•:]/)
           .map(s => s.replace(/[^\w\s+#.-]/g, '').trim())
           .filter(s => s.length > 1 && s.length < 30)
-          .slice(0, 20); // Limit to reasonable number
+          .slice(0, 20);
         
         result.technicalSkills = [...new Set(skills)];
-        console.log('Found skills:', result.technicalSkills);
+        console.log('Keahlian ditemukan:', result.technicalSkills);
       }
 
-      // Extract education
       const eduMatch = text.match(/EDUCATION\s*\n([\s\S]*?)(?=\n[A-Z]{3,}|$)/i);
       if (eduMatch) {
         const eduText = eduMatch[1];
-        // Look for institution patterns
         const instMatch = eduText.match(/([A-Z][A-Z\s&]+?)\s+.*?(\d{4}.*?(?:Present|\d{4}))/g);
         if (instMatch) {
           result.educations = instMatch.map(edu => {
@@ -241,15 +248,13 @@ JSON Response:`;
               details: ""
             };
           });
-          console.log('Found education:', result.educations);
+          console.log('Pendidikan ditemukan:', result.educations);
         }
       }
 
-      // Extract experiences  
       const expMatch = text.match(/(?:EXPERIENCE|PROJECT)[\s\S]*?(?=\n[A-Z]{3,}|$)/i);
       if (expMatch) {
         const expText = expMatch[0];
-        // Look for organization/company patterns
         const companies = expText.match(/([A-Z][a-zA-Z\s&-]+?)(?:\s+–|\s+\n)/g);
         if (companies) {
           result.profesionalExperiences = companies.slice(0, 5).map(comp => ({
@@ -258,12 +263,12 @@ JSON Response:`;
             duration: "Not specified", 
             description: ""
           }));
-          console.log('Found experiences:', result.profesionalExperiences);
+          console.log('Pengalaman ditemukan:', result.profesionalExperiences);
         }
       }
 
     } catch (error) {
-      console.error('Manual parsing error:', error);
+      console.error('Error parsing manual:', error);
     }
 
     return result;
@@ -271,25 +276,25 @@ JSON Response:`;
 
   async parseCvFromPdfBuffer(buffer: Buffer) {
     try {
-      console.log('=== STARTING CV PARSING ===');
+      console.log('=== MEMULAI PARSING CV ===');
       
       const extractedText = await this.extractTextFromPdfBuffer(buffer);
 
       if (!extractedText || extractedText.trim().length === 0) {
-        throw new Error("No text could be extracted from PDF");
+        throw new Error("Tidak ada teks yang dapat diekstrak dari PDF");
       }
 
-      console.log('=== EXTRACTED TEXT LENGTH ===', extractedText.length);
-      console.log('=== FIRST 200 CHARS ===');
+      console.log('=== PANJANG TEKS YANG DIEKSTRAK ===', extractedText.length);
+      console.log('=== 200 KARAKTER PERTAMA ===');
       console.log(extractedText.substring(0, 200));
 
       const parsedData = await this.parseWithGemini(extractedText);
       
-      console.log('=== PARSING COMPLETED ===');
+      console.log('=== PARSING SELESAI ===');
       return parsedData;
       
     } catch (error) {
-      console.error("Error in parseCvFromPdfBuffer:", error);
+      console.error("Error di parseCvFromPdfBuffer:", error);
       throw error;
     }
   }
@@ -299,7 +304,7 @@ JSON Response:`;
       const data = await pdf(buffer);
       return data.text;
     } catch (error) {
-      throw new Error(`Failed to extract text from PDF buffer: ${error}`);
+      throw new Error(`Gagal mengekstrak teks dari buffer PDF: ${error}`);
     }
   }
 }

@@ -17,24 +17,27 @@ class CvService {
     userId: number
   ) {
     try {
-      console.log('Starting CV parsing process...');
+      console.log('Memulai proses parsing CV di layanan...'); 
       
       const parsed = await this.cvRepository.parseCvFromPdfBuffer(buffer);
       
-      console.log('Parsed data:', JSON.stringify(parsed, null, 2));
+      console.log('Data yang diparsing dari repository:', JSON.stringify(parsed, null, 2));
 
-      // ✅ Map data properly to match Prisma schema with correct types
+      // ✅ Map data dengan benar agar sesuai dengan skema Prisma dengan tipe yang benar
       const cvData: Prisma.CvCreateInput = {
         appliedJob,
         name: parsed.name,
         jobTitle: parsed.jobTitle,
-        educations: parsed.educations, // Array
-        experiences: parsed.profesionalExperiences, // ✅ Fix: experiences not experience
-        skills: parsed.technicalSkills, // Array
+        educations: parsed.educations as Prisma.InputJsonValue, // Gunakan Prisma.InputJsonValue
+        experiences: parsed.profesionalExperiences as Prisma.InputJsonValue, // ✅ Perbaiki: gunakan profesionalExperiences
+        skills: parsed.technicalSkills as Prisma.InputJsonValue, // ✅ Perbaiki: gunakan technicalSkills
         parseText: parsed.parseText,
-        matchScore: null, // ✅ Use Prisma.JsonNull instead of null
-        jobRecommendation: Prisma.JsonNull, // ✅ Use Prisma.JsonNull instead of null
-        fixCv: Prisma.JsonNull, // ✅ Use Prisma.JsonNull instead of null
+        // matchScore, jobRecommendation, fixCv bisa null.
+        // Jika skema Prisma Anda adalah Json? (nullable Json), Prisma.JsonNull adalah cara yang benar
+        // untuk menetapkan nilai null.
+        matchScore: parsed.matchScore !== undefined && parsed.matchScore !== null ? parsed.matchScore : null,
+        jobRecommendation: parsed.jobRecommendation !== undefined && parsed.jobRecommendation !== null ? parsed.jobRecommendation : Prisma.JsonNull,
+        fixCv: parsed.fixCv !== undefined && parsed.fixCv !== null ? parsed.fixCv : Prisma.JsonNull,
         user: {
           connect: {
             id: userId
@@ -42,20 +45,19 @@ class CvService {
         }
       };
 
-      console.log('Creating CV with data:', JSON.stringify(cvData, null, 2));
+      console.log('Membuat CV dengan data untuk Prisma:', JSON.stringify(cvData, null, 2));
 
       const newCv = await this.cvRepository["prisma"].cv.create({
         data: cvData,
       });
 
-      console.log('CV created successfully:', newCv.id);
+      console.log('CV berhasil dibuat dengan ID:', newCv.id);
       return newCv;
 
     } catch (error) {
-      console.error('Error in createCvFromPdfBuffer:', error);
+      console.error('Error di createCvFromPdfBuffer (Layanan):', error); 
       
-      // ✅ Return proper error object instead of string
-      throw new Error(`Error creating CV from PDF buffer: ${
+      throw new Error(`Error membuat CV dari buffer PDF: ${
         error instanceof Error ? error.message : String(error)
       }`);
     }
@@ -66,7 +68,7 @@ class CvService {
       const text = await this.cvRepository.extractTextFromPdfBuffer(buffer);
       return text;
     } catch (error) {
-      throw new Error(`Error extracting text from PDF: ${
+      throw new Error(`Error mengekstrak teks dari PDF: ${
         error instanceof Error ? error.message : String(error)
       }`);
     }
