@@ -63,11 +63,7 @@ This project follows a clean and organized structure, ensuring maintainability a
 
 ### Notes
 
-- `GET /api/cvs` - Retrieve all cvs
-- `POST /api/cv` - Create a new cv
-- `GET /api/cv/:id` - Retrieve a specific cv by ID
-- `PUT /api/cv/:id` - Update a specific cv by ID
-- `PATCH /api/cv/:id` - Soft delete a specific cv by ID
+- `POST /api/cvs` - Create a new predict cv
 
 ## Getting Started
 
@@ -115,11 +111,14 @@ erDiagram
     CV {
         Int id
         String appliedPosition
+        String name
         String jobTitle
-        String technicalSkills
-        String profesionalExperience
-        String rawText
+        Object skills
+        Object experiences
+        String parseText
         Float matchScore
+        Object jobRecomendation
+        Object fixCv
         DateTime createdAt
         DateTime updatedAt
         Boolean isDeleted

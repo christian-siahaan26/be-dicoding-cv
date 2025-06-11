@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://github.com/tian0813/be-dicoding-cv",
+      "url": "https://be-dicoding-cv-o8hg.vercel.app",
       "description": "Production server"
     }
   ],
@@ -284,9 +284,19 @@
         "properties": {
           "id": { "type": "integer" },
           "appliedJob": { "type": "string" },
-          "education": { "type": "string" },
-          "technicalSkills": { "type": "array", "items": { "type": "string" } },
-          "profesionalExperience": {
+          "name": { "type": "string"},
+          "education": { "type": "array", "items": "object" },
+          "skills": { "type": "array", "items": { "type": "string" } },
+          "experiences": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "matchScore": { "type": "number"},
+          "jobRecomendation": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "fixCv": {
             "type": "array",
             "items": { "type": "object" }
           },
