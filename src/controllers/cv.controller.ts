@@ -1,9 +1,7 @@
 import { Request, NextFunction, Response } from "express";
-import { responses } from "../constants";
 import { AuthRequest } from "../middleware/auth";
 import CvService from "../services/cv.service";
-import { CvFilters } from "../types/cv";
-import { PaginationParams } from "../types/pagination";
+import axios from "axios";
 
 class CvController {
   private cvService: CvService;
@@ -43,59 +41,73 @@ class CvController {
         req.user.id
       );
 
-      // --- DISINI (DI ANTARA newCv dan return res.status) ---
-      // Ini adalah tempat yang TEPAT untuk memanggil fetch ke API model AI
-      // const aiModelApiUrl = "http://localhost:5000/api/model";
+      // --- PANGGIL API MODEL AI DI SINI ---
+      // const aiModelApiUrl =
+      //   process.env.AI_MODEL_API_URL || "https://us-central1-aiplatform.googleapis.com/v1/projects/107980180543/locations/us-central1/endpoints/5168211525407604736:predict";
 
       // const dataForAiModel = {
-      //     parseText: newCv.parseText,
-      //     appliedJob: newCv.appliedJob,
-      //     cvId: newCv.id
+      //   parseText: newCv.parseText,
+      //   appliedJob: newCv.appliedJob,
+      //   skills: newCv.skills,
+      //   experiences: newCv.experiences,
+      //   educations: newCv.educations,
+      //   jobTitle: newCv.jobTitle,
       // };
 
+      // let updatedCv = { ...newCv };
+
       // try {
-      //     const aiResponse = await fetch(aiModelApiUrl, {
-      //         method: "POST",
-      //         headers: {
-      //             "Content-Type": "application/json",
-      //         },
-      //         body: JSON.stringify(dataForAiModel),
-      //         timeout: 60000
-      //     });
+      //   const aiResponse = await axios.post(aiModelApiUrl, dataForAiModel, {
+      //     headers: {
+      //       "Content-Type": "application/json",
+      //     },
+      //     timeout: 60000,
+      //   });
 
-      //     if (!aiResponse.ok) {
-      //         const errorBody = await aiResponse.text();
-      //         console.error(`Error from AI Model API (${aiResponse.status}): ${errorBody}`);
-      //         // Tangani error, tetapi lanjutkan untuk mengirim respons ke klien dengan data yang sudah disimpan
-      //     } else {
-      //         const aiResult = await aiResponse.json();
-      //         console.log("AI Model API Response:", aiResult);
+      //   if (aiResponse.status >= 200 && aiResponse.status < 300) {
+      //     const aiResult = aiResponse.data;
+      //     console.log("AI Model API Response:", aiResult);
 
-      //         // Perbarui data CV di database dengan hasil dari AI
-      //         await this.cvService.updateCvAnalysisResults(
-      //             newCv.id,
-      //             aiResult.matchScore,
-      //             aiResult.jobRecommendation,
-      //             aiResult.fixCv
-      //         );
+      //     updatedCv = await this.cvService.updateCvAnalysisResults(
+      //       newCv.id,
+      //       aiResult.matchScore,
+      //       aiResult.jobRecommendation,
+      //       aiResult.fixCv
+      //     );
 
-      //         // Perbarui objek newCv yang akan dikirim ke klien
-      //         newCv.matchScore = aiResult.matchScore;
-      //         newCv.jobRecommendation = aiResult.jobRecommendation;
-      //         newCv.fixCv = aiResult.fixCv;
-      //     }
-      // } catch (fetchError) {
-      //     console.error("Error during fetch to AI Model API:", fetchError);
-      //     // Tangani error koneksi atau timeout fetch
+      //     console.log("CV updated with AI analysis results:", updatedCv.id);
+      //   } else {
+      //     console.error(
+      //       `Error from AI Model API (${aiResponse.status}):`,
+      //       aiResponse.data
+      //     );
+      //   }
+      // } catch (axiosError: any) {
+      //   if (axiosError.response) {
+      //     console.error(
+      //       `Axios Error (Response): ${
+      //         axiosError.response.status
+      //       } - ${JSON.stringify(axiosError.response.data)}`
+      //     );
+      //   } else if (axiosError.request) {
+      //     console.error(
+      //       "Axios Error (No Response): Request made but no response received."
+      //     );
+      //   } else {
+      //     console.error("Axios Error (Request Setup):", axiosError.message);
+      //   }
+      //   console.warn(
+      //     "AI model analysis failed. Returning CV data without AI analysis."
+      //   );
       // }
-      // // --- AKHIR DARI BLOK FETCH ---
 
       return res.status(201).json({
         success: true,
-        message: "CV successfully uploaded and saved",
+        message: "CV successfully uploaded and processed",
         data: newCv,
       });
     } catch (error) {
+      console.error("Error in uploadAndSaveCv:", error);
       next(error);
     }
   }

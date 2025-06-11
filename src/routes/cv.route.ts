@@ -23,4 +23,6 @@ router.post(
   cvController.uploadAndSaveCv.bind(cvController)
 );
 
+// https://be-dicoding-cv-o8hg.vercel.app/api/cvs/upload
+
 export default router;
