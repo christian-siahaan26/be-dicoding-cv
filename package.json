@@ -30,6 +30,7 @@
     "morgan": "~1.9.1",
     "multer": "^2.0.0",
     "pdf-parse": "^1.1.1",
+    "statuses": "^2.0.2",
     "streamifier": "^0.1.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^4.6.3"
@@ -50,7 +51,7 @@
     "nodemon": "^3.1.9",
     "prisma": "^6.9.0",
     "ts-node-dev": "^2.0.0",
-    "tsx": "^4.19.3",
+    "tsx": "^4.7.1",
     "typescript": "^5.3.3"
   }
 }

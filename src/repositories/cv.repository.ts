@@ -3,9 +3,9 @@ import Cv from "../models/cv.model";
 import { CreateCvDto, UpdateCvDto, CvFilters } from "../types/cv";
 import { PaginationParams } from "../types/pagination";
 import { getErrorMessage } from "../utils/error";
-import fs from "fs"; // Tetap dibutuhkan jika ada logika lain yang melibatkan fs, tapi tidak untuk kredensial
+import fs from "fs";
 import pdf from "pdf-parse";
-import { getGeminiModel } from "../utils/vertexClient"; // Import fungsi getter
+import { geminiModel, getProjectInfo } from "../utils/vertexClient";
 
 class CvRepository {
   private prisma: PrismaClient;
@@ -15,296 +15,373 @@ class CvRepository {
   }
 
   private async parseWithGemini(text: string) {
-    const geminiModel = getGeminiModel(); // Ambil model yang sudah diinisialisasi di sini
+    // ✅ Enhanced prompt with better structure
+    const prompt = `You are an expert CV/Resume parser. Extract information from the following CV text and return ONLY a valid JSON object.
 
-    // ✅ Prompt yang ditingkatkan dengan struktur dan instruksi yang lebih baik
-    const prompt = `Anda adalah seorang ahli CV/Resume parser. Ekstrak informasi dari teks CV berikut dan kembalikan HANYA objek JSON yang valid.
+EXTRACTION RULES:
+1. Extract the person's full name (usually at the top of CV)
+2. Identify current job title or desired position
+3. List ALL technical skills, programming languages, frameworks, tools mentioned
+4. Extract ALL work experiences including internships, projects, freelance work
+5. Extract ALL educational background including courses, certifications
+6. Be thorough and extract every relevant detail
 
-ATURAN EKSTRAKSI:
-1. Ekstrak nama lengkap kandidat (biasanya di bagian atas).
-2. Identifikasi judul pekerjaan (job title) saat ini atau posisi yang diinginkan dari bagian objektif/ringkasan atau peran terbaru. Gunakan "Not specified" jika tidak ada judul yang jelas dapat disimpulkan.
-3. Daftar SEMUA keahlian teknis, bahasa pemrograman, alat, dan perangkat lunak relevan yang disebutkan sebagai array string datar.
-4. Ekstrak SEMUA pengalaman kerja, termasuk proyek, magang, dan pekerjaan freelance.
-5. Ekstrak SEMUA entri latar belakang pendidikan.
-6. Lakukan ekstraksi secara menyeluruh dan akurat.
-7. JANGAN sertakan judul bagian (misalnya, "EXPERIENCE", "SKILLS", "EDUCATION", "PROJECTS") sebagai entri data aktual dalam JSON.
-
-FORMAT JSON YANG DIBUTUHKAN:
+REQUIRED JSON FORMAT (DO NOT DEVIATE):
 {
-  "name": "Nama Lengkap Di Sini",
-  "jobTitle": "Judul Pekerjaan Saat Ini atau Yang Diinginkan",
+  "name": "Full Name Here",
+  "jobTitle": "Current or Desired Job Title", 
   "educations": [
     {
-      "institution": "Nama Sekolah/Universitas",
-      "degree": "Nama Gelar/Program (misal: Sarjana Sains, S.Kom, MBA)", 
-      "duration": "Tanggal Mulai - Tanggal Selesai (misal: September 2022 - 2026, 2020 - Sekarang)",
-      "details": "Informasi tambahan seperti IPK, lokasi, pencapaian spesifik (sebagai satu string atau null)"
+      "institution": "School/University/Institution Name",
+      "degree": "Degree/Program/Course Name", 
+      "duration": "Start Date - End Date",
+      "details": "Additional info like GPA, location, achievements"
     }
   ],
-  "technicalSkills": ["Keahlian 1", "Keahlian 2", "Keahlian N"],
+  "technicalSkills": ["Skill1", "Skill2", "Skill3"],
   "profesionalExperiences": [
     {
-      "company": "Nama Perusahaan/Organisasi",
-      "role": "Judul Posisi/Peran",
-      "duration": "Tanggal Mulai - Tanggal Selesai (misal: Februari 2025 – Sekarang, Agustus 2024 – Oktober 2024)",
-      "description": "Tanggung jawab dan pencapaian utama dalam peran ini (sebagai satu string ringkas)"
+      "company": "Company/Organization Name",
+      "role": "Position/Role Title",
+      "duration": "Start Date - End Date", 
+      "description": "Key responsibilities, achievements, and projects"
     }
   ]
 }
 
-TEKS CV UNTUK DIANALISIS:
+CV TEXT TO ANALYZE:
 ${text}
 
-PENTING: 
-- Kembalikan HANYA objek JSON.
-- TIDAK ADA format markdown (misal: tanpa \`\`\`json).
-- TIDAK ADA penjelasan tambahan atau teks percakapan.
-- Ekstrak SEMUA informasi yang ditemukan dalam teks untuk field yang ditentukan.
-- Gunakan "Not specified" hanya jika informasi benar-benar tidak ada untuk field string.
-- Untuk field array (educations, technicalSkills, profesionalExperiences), kembalikan array kosong [] jika tidak ada entri yang ditemukan.
+CRITICAL REQUIREMENTS:
+- Return ONLY the JSON object, no other text
+- NO markdown formatting (no \`\`\`json)
+- NO explanations or comments
+- Extract ALL information found in the text
+- Use empty string "" for missing optional fields like details/description
+- Use "Not specified" only for required fields if truly missing
+- Ensure all arrays have at least one item if information exists
 
-Respons JSON:`;
+JSON Response:`;
 
     let textResponse: string | undefined = undefined;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    try {
-      const result = await geminiModel.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        // generationConfig sudah diatur di vertexClient.ts, tidak perlu diulang
-      });
+    while (retryCount < maxRetries) {
+      try {
+        console.log(`=== VERTEX AI PARSING ATTEMPT ${retryCount + 1} ===`);
+        console.log('Project Info:', getProjectInfo());
 
-      const candidates = result.response.candidates;
-      textResponse = candidates?.[0]?.content?.parts?.[0]?.text;
+        // ✅ Enhanced generation config for better parsing
+        const result = await geminiModel.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.05, // Very low temperature for consistent parsing
+            topP: 0.7,
+            topK: 20,
+            maxOutputTokens: 4096, // Increased for complex CVs
+            stopSequences: ["\n\n---", "\n\nNote:", "\n\nExplanation:"]
+          },
+        });
 
-      if (!textResponse) {
-        throw new Error("Tidak ada respons teks dari Gemini.");
+        const candidates = result.response.candidates;
+        textResponse = candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!textResponse) {
+          throw new Error("No text response from Gemini");
+        }
+
+        console.log("=== RAW GEMINI RESPONSE ===");
+        console.log(textResponse.substring(0, 500) + "...");
+
+        // ✅ Enhanced response cleaning
+        let cleanResponse = textResponse.trim();
+
+        // Remove markdown formatting
+        cleanResponse = cleanResponse.replace(/```json\s*/gi, "");
+        cleanResponse = cleanResponse.replace(/```\s*/g, "");
+        cleanResponse = cleanResponse.replace(/^```/g, "");
+        cleanResponse = cleanResponse.replace(/```$/g, "");
+
+        // Remove any explanatory text before/after JSON
+        const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleanResponse = jsonMatch[0];
+        }
+
+        // Remove any trailing text after JSON
+        const lastBrace = cleanResponse.lastIndexOf('}');
+        if (lastBrace !== -1) {
+          cleanResponse = cleanResponse.substring(0, lastBrace + 1);
+        }
+
+        console.log("=== CLEANED RESPONSE ===");
+        console.log(cleanResponse.substring(0, 300) + "...");
+
+        // ✅ Parse JSON with error handling
+        const parsedData = JSON.parse(cleanResponse);
+
+        console.log("=== PARSED DATA SUCCESS ===");
+        console.log("Name:", parsedData.name);
+        console.log("Job Title:", parsedData.jobTitle);
+        console.log("Skills count:", parsedData.technicalSkills?.length || 0);
+        console.log("Education count:", parsedData.educations?.length || 0);
+        console.log("Experience count:", parsedData.profesionalExperiences?.length || 0);
+
+        // ✅ Enhanced validation and normalization
+        const validatedData = {
+          name: this.validateAndCleanString(parsedData.name) || "Parse Error - Manual Review Required",
+          jobTitle: this.validateAndCleanString(parsedData.jobTitle) || "Not specified",
+          educations: this.validateEducations(parsedData.educations),
+          technicalSkills: this.validateSkills(parsedData.technicalSkills),
+          profesionalExperiences: this.validateExperiences(parsedData.profesionalExperiences),
+          parseText: text,
+        };
+
+        console.log("=== FINAL VALIDATED DATA ===");
+        console.log("Final name:", validatedData.name);
+        console.log("Final skills:", validatedData.technicalSkills.length);
+        console.log("Final education:", validatedData.educations.length);
+        console.log("Final experience:", validatedData.profesionalExperiences.length);
+
+        return validatedData;
+
+      } catch (error) {
+        console.error(`=== PARSING ERROR ATTEMPT ${retryCount + 1} ===`);
+        console.error("Error:", error);
+        console.error("Raw response:", textResponse?.substring(0, 200) || "No response");
+
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          console.log("=== MAX RETRIES REACHED, TRYING MANUAL PARSING ===");
+          const manualParsed = this.manualParseCV(text);
+
+          if (manualParsed.name !== "Parse Error - Manual Review Required") {
+            console.log("✅ Manual parsing successful");
+            return manualParsed;
+          }
+
+          // Final fallback
+          return {
+            name: "Parse Error - Manual Review Required",
+            jobTitle: "Not specified", 
+            educations: [],
+            technicalSkills: [],
+            profesionalExperiences: [],
+            parseText: text,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
       }
-
-      console.log('=== RESPON MENTAH DARI GEMINI ===');
-      console.log(textResponse);
-
-      // ✅ Pembersihan respons yang lebih baik
-      let cleanResponse = textResponse.trim();
-      
-      // Hapus format markdown
-      cleanResponse = cleanResponse.replace(/```json\s*/g, '');
-      cleanResponse = cleanResponse.replace(/```\s*/g, '');
-      cleanResponse = cleanResponse.replace(/^```/g, '');
-      cleanResponse = cleanResponse.replace(/```$/g, '');
-      
-      // Hapus teks penjelasan sebelum/sesudah JSON
-      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch && jsonMatch[0]) {
-        cleanResponse = jsonMatch[0];
-      } else {
-        console.warn('Tidak ada objek JSON yang ditemukan dalam respons Gemini setelah pembersihan. Mencoba parsing teks mentah.');
-      }
-
-      console.log('=== RESPON DIBERSIHKAN ===');
-      console.log(cleanResponse);
-
-      // ✅ Parsing JSON dengan penanganan error yang lebih baik
-      const parsedData = JSON.parse(cleanResponse);
-      
-      console.log('=== DATA YANG DI-PARSE ===');
-      console.log(JSON.stringify(parsedData, null, 2));
-
-      // ✅ Validasi dan normalisasi yang ditingkatkan
-      // Pemetaan sesuai dengan field yang diminta Gemini di prompt Anda
-      const validatedData = {
-        name: this.validateAndCleanString(parsedData.name) || "Error Parsing - Perlu Review Manual",
-        jobTitle: this.validateAndCleanString(parsedData.jobTitle) || "Not specified",
-        educations: this.validateEducations(parsedData.educations),
-        technicalSkills: this.validateSkills(parsedData.technicalSkills),
-        profesionalExperiences: this.validateExperiences(parsedData.profesionalExperiences),
-        parseText: text, // Simpan teks yang diparsing sebagai bagian dari data
-        matchScore: null, // Gemini tidak mengekstrak ini, jadi default null
-        jobRecommendation: null, // Gemini tidak mengekstrak ini, jadi default null
-        fixCv: null, // Gemini tidak mengekstrak ini, jadi default null
-      };
-
-      console.log('=== DATA AKHIR YANG DIVALIDASI ===');
-      console.log(JSON.stringify(validatedData, null, 2));
-
-      return validatedData;
-
-    } catch (error) {
-      console.error('=== ERROR PARSING ===');
-      console.error('Error:', error);
-      console.error('Respons Mentah:', textResponse || "Tidak ada respons diterima");
-      
-      // ✅ Coba parsing manual sebagai fallback
-      console.log('=== MENCOBA PARSING MANUAL SEBAGAI FALLBACK ===');
-      const manualParsed = this.manualParseCV(text);
-      
-      if (manualParsed.name !== "Error Parsing - Perlu Review Manual") {
-        console.log('Parsing manual fallback berhasil.');
-        return manualParsed;
-      }
-      
-      // Fallback terakhir jika kedua metode gagal
-      return {
-        name: "Error Parsing - Perlu Review Manual",
-        jobTitle: "Not specified",
-        educations: [],
-        technicalSkills: [],
-        profesionalExperiences: [],
-        parseText: text,
-        matchScore: null, // Tambahkan properti ini
-        jobRecommendation: null, // Tambahkan properti ini
-        fixCv: null, // Tambahkan properti ini
-        error: error instanceof Error ? error.message : String(error)
-      };
     }
+
+    // This shouldn't be reached, but just in case
+    throw new Error("Failed to parse CV after all retries");
   }
 
-  // ✅ Metode validasi helper (tetap sama)
+  // ✅ Enhanced validation methods
   private validateAndCleanString(value: any): string | null {
-    if (typeof value === 'string' && value.trim().length > 0) {
+    if (typeof value === "string" && value.trim().length > 0 && value.trim() !== "null" && value.trim() !== "undefined") {
       return value.trim();
     }
     return null;
   }
 
   private validateSkills(skills: any): string[] {
-    if (!Array.isArray(skills)) return [];
-    
-    return skills
-      .filter(skill => typeof skill === 'string' && skill.trim().length > 0)
-      .map(skill => skill.trim())
-      .filter((skill, index, arr) => arr.indexOf(skill) === index); // Hapus duplikat
+    if (!Array.isArray(skills)) {
+      console.log("Skills is not an array:", typeof skills);
+      return [];
+    }
+
+    const validSkills = skills
+      .filter((skill) => typeof skill === "string" && skill.trim().length > 0)
+      .map((skill) => skill.trim())
+      .filter((skill) => skill.length >= 2 && skill.length <= 50) // Reasonable skill name length
+      .filter((skill, index, arr) => arr.indexOf(skill) === index); // Remove duplicates
+
+    console.log("Validated skills:", validSkills.length, "from", skills.length);
+    return validSkills;
   }
 
   private validateEducations(educations: any): any[] {
-    if (!Array.isArray(educations)) return [];
-    
-    return educations.map(edu => ({
+    if (!Array.isArray(educations)) {
+      console.log("Educations is not an array:", typeof educations);
+      return [];
+    }
+
+    const validEducations = educations.map((edu) => ({
       institution: this.validateAndCleanString(edu?.institution) || "Not specified",
-      degree: this.validateAndCleanString(edu?.degree) || "Not specified", 
+      degree: this.validateAndCleanString(edu?.degree) || "Not specified",
       duration: this.validateAndCleanString(edu?.duration) || "Not specified",
-      details: this.validateAndCleanString(edu?.details) || ""
+      details: this.validateAndCleanString(edu?.details) || "",
     }));
+
+    console.log("Validated educations:", validEducations.length, "from", educations.length);
+    return validEducations;
   }
 
   private validateExperiences(experiences: any): any[] {
-    if (!Array.isArray(experiences)) return [];
-    
-    return experiences.map(exp => ({
+    if (!Array.isArray(experiences)) {
+      console.log("Experiences is not an array:", typeof experiences);
+      return [];
+    }
+
+    const validExperiences = experiences.map((exp) => ({
       company: this.validateAndCleanString(exp?.company) || "Not specified",
       role: this.validateAndCleanString(exp?.role) || "Not specified",
-      duration: this.validateAndCleanString(exp?.duration) || "Not specified", 
-      description: this.validateAndCleanString(exp?.description) || ""
+      duration: this.validateAndCleanString(exp?.duration) || "Not specified",
+      description: this.validateAndCleanString(exp?.description) || "",
     }));
+
+    console.log("Validated experiences:", validExperiences.length, "from", experiences.length);
+    return validExperiences;
   }
 
-  // ✅ Parsing manual fallback (tetap sama)
+  // ✅ Enhanced manual parsing fallback
   private manualParseCV(text: string) {
-    console.log('Memulai parsing CV manual...');
-    
+    console.log("=== STARTING MANUAL CV PARSING ===");
+
     const result = {
-      name: "Error Parsing - Perlu Review Manual",
-      jobTitle: "Not specified", 
+      name: "Parse Error - Manual Review Required",
+      jobTitle: "Not specified",
       educations: [] as any[],
       technicalSkills: [] as string[],
       profesionalExperiences: [] as any[],
       parseText: text,
-      matchScore: null,
-      jobRecommendation: null,
-      fixCv: null,
     };
 
     try {
-      // Logika regex yang sudah ada
-      const nameMatch = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/m);
-      if (nameMatch) {
-        result.name = nameMatch[1].trim();
-        console.log('Nama ditemukan:', result.name);
-      }
-
-      const skillsMatch = text.match(/SKILLS?\s*\n([\s\S]*?)(?=\n[A-Z]{3,}|$)/i);
-      if (skillsMatch) {
-        const skillsText = skillsMatch[1];
-        const skills = skillsText
-          .split(/[,\n•:]/)
-          .map(s => s.replace(/[^\w\s+#.-]/g, '').trim())
-          .filter(s => s.length > 1 && s.length < 30)
-          .slice(0, 20);
-        
-        result.technicalSkills = [...new Set(skills)];
-        console.log('Keahlian ditemukan:', result.technicalSkills);
-      }
-
-      const eduMatch = text.match(/EDUCATION\s*\n([\s\S]*?)(?=\n[A-Z]{3,}|$)/i);
-      if (eduMatch) {
-        const eduText = eduMatch[1];
-        const instMatch = eduText.match(/([A-Z][A-Z\s&]+?)\s+.*?(\d{4}.*?(?:Present|\d{4}))/g);
-        if (instMatch) {
-          result.educations = instMatch.map(edu => {
-            const lines = edu.split('\n').map(l => l.trim()).filter(l => l);
-            return {
-              institution: lines[0] || "Not specified",
-              degree: lines[1] || "Not specified",
-              duration: lines.find(l => /\d{4}/.test(l)) || "Not specified",
-              details: ""
-            };
-          });
-          console.log('Pendidikan ditemukan:', result.educations);
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      
+      // Extract name (usually first few lines with proper names)
+      for (let i = 0; i < Math.min(5, lines.length); i++) {
+        const line = lines[i];
+        if (/^[A-Z][a-z]+(\s+[A-Z][a-z]+)+$/.test(line) && line.length < 50) {
+          result.name = line;
+          console.log("Found name:", result.name);
+          break;
         }
       }
 
-      const expMatch = text.match(/(?:EXPERIENCE|PROJECT)[\s\S]*?(?=\n[A-Z]{3,}|$)/i);
-      if (expMatch) {
-        const expText = expMatch[0];
-        const companies = expText.match(/([A-Z][a-zA-Z\s&-]+?)(?:\s+–|\s+\n)/g);
-        if (companies) {
-          result.profesionalExperiences = companies.slice(0, 5).map(comp => ({
-            company: comp.trim().replace(/–$/, ''),
-            role: "Not specified",
-            duration: "Not specified", 
-            description: ""
+      // Extract skills (look for SKILLS section)
+      const skillsSection = this.extractSection(text, ['SKILLS', 'TECHNICAL SKILLS', 'TECHNOLOGIES']);
+      if (skillsSection) {
+        const skills = skillsSection
+          .split(/[,\n•·\-:]/)
+          .map(s => s.replace(/[^\w\s+#.-]/g, '').trim())
+          .filter(s => s.length > 1 && s.length < 30)
+          .slice(0, 20);
+
+        result.technicalSkills = [...new Set(skills)];
+        console.log("Found skills:", result.technicalSkills.length);
+      }
+
+      // Extract education
+      const educationSection = this.extractSection(text, ['EDUCATION', 'ACADEMIC', 'QUALIFICATIONS']);
+      if (educationSection) {
+        // Simple parsing - look for institution patterns
+        const eduLines = educationSection.split('\n').filter(line => line.trim().length > 0);
+        const institutions = eduLines.filter(line => 
+          /university|college|school|institute/i.test(line) || 
+          /bachelor|master|degree|diploma/i.test(line)
+        );
+
+        if (institutions.length > 0) {
+          result.educations = institutions.slice(0, 3).map(inst => ({
+            institution: inst.trim(),
+            degree: "Not specified",
+            duration: "Not specified",
+            details: "",
           }));
-          console.log('Pengalaman ditemukan:', result.profesionalExperiences);
+          console.log("Found education:", result.educations.length);
+        }
+      }
+
+      // Extract experience
+      const experienceSection = this.extractSection(text, ['EXPERIENCE', 'WORK', 'EMPLOYMENT', 'PROJECTS']);
+      if (experienceSection) {
+        const expLines = experienceSection.split('\n').filter(line => line.trim().length > 0);
+        const companies = expLines.filter(line => 
+          line.length > 5 && line.length < 100 && 
+          /[A-Z]/.test(line) && 
+          !/^(•|-)/.test(line.trim())
+        );
+
+        if (companies.length > 0) {
+          result.profesionalExperiences = companies.slice(0, 5).map(company => ({
+            company: company.trim(),
+            role: "Not specified", 
+            duration: "Not specified",
+            description: "",
+          }));
+          console.log("Found experiences:", result.profesionalExperiences.length);
         }
       }
 
     } catch (error) {
-      console.error('Error parsing manual:', error);
+      console.error("Manual parsing error:", error);
     }
 
+    console.log("=== MANUAL PARSING COMPLETED ===");
     return result;
+  }
+
+  private extractSection(text: string, sectionNames: string[]): string | null {
+    for (const sectionName of sectionNames) {
+      const regex = new RegExp(`${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n[A-Z]{3,}|$)`, 'i');
+      const match = text.match(regex);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    return null;
   }
 
   async parseCvFromPdfBuffer(buffer: Buffer) {
     try {
-      console.log('=== MEMULAI PARSING CV ===');
-      
+      console.log("=== STARTING CV PARSING FROM PDF ===");
+      console.log("Buffer size:", buffer.length, "bytes");
+
       const extractedText = await this.extractTextFromPdfBuffer(buffer);
 
       if (!extractedText || extractedText.trim().length === 0) {
-        throw new Error("Tidak ada teks yang dapat diekstrak dari PDF");
+        throw new Error("No text could be extracted from PDF");
       }
 
-      console.log('=== PANJANG TEKS YANG DIEKSTRAK ===', extractedText.length);
-      console.log('=== 200 KARAKTER PERTAMA ===');
-      console.log(extractedText.substring(0, 200));
+      console.log("=== EXTRACTED TEXT INFO ===");
+      console.log("Text length:", extractedText.length);
+      console.log("First 300 chars:", extractedText.substring(0, 300));
+      console.log("Contains keywords:", {
+        hasName: /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(extractedText),
+        hasEducation: /education|university|college/i.test(extractedText),
+        hasExperience: /experience|work|job|project/i.test(extractedText),
+        hasSkills: /skills|technical|programming/i.test(extractedText)
+      });
 
       const parsedData = await this.parseWithGemini(extractedText);
-      
-      console.log('=== PARSING SELESAI ===');
+
+      console.log("=== CV PARSING COMPLETED SUCCESSFULLY ===");
       return parsedData;
-      
     } catch (error) {
-      console.error("Error di parseCvFromPdfBuffer:", error);
+      console.error("=== ERROR IN parseCvFromPdfBuffer ===");
+      console.error("Error:", error);
       throw error;
     }
   }
 
   async extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
     try {
+      console.log("Extracting text from PDF buffer...");
       const data = await pdf(buffer);
+      console.log("PDF extraction successful, text length:", data.text.length);
       return data.text;
     } catch (error) {
-      throw new Error(`Gagal mengekstrak teks dari buffer PDF: ${error}`);
+      console.error("PDF extraction error:", error);
+      throw new Error(`Failed to extract text from PDF buffer: ${error}`);
     }
   }
 }
