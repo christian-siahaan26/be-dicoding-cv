@@ -15,7 +15,7 @@ export function initializeVertexAIClient() {
   // VertexAI SDK akan secara otomatis mengambil kredensial dari GOOGLE_APPLICATION_CREDENTIALS
   // (yang seharusnya sudah disetel oleh app.ts untuk menunjuk ke /tmp/google_credentials.json)
   vertexAiInstance = new VertexAI({
-    project: process.env.GCP_PROJECT_ID || "your-default-project-id", // Gunakan env var, tambahkan fallback
+    project: process.env.GCP_PROJECT_ID || "lexical-tide-462414-s5", // Gunakan env var, tambahkan fallback
     location: process.env.GCP_REGION || "us-central1", // Gunakan env var, tambahkan fallback
     // TIDAK ADA PROPERTI 'auth' DI SINI - mengandalkan env var GOOGLE_APPLICATION_CREDENTIALS
   });
