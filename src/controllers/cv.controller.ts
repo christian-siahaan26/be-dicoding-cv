@@ -42,69 +42,71 @@ class CvController {
       );
 
       // --- PANGGIL API MODEL AI DI SINI ---
-      // const aiModelApiUrl =
-      //   process.env.AI_MODEL_API_URL || "https://us-central1-aiplatform.googleapis.com/v1/projects/107980180543/locations/us-central1/endpoints/5168211525407604736:predict";
+      const aiModelApiUrl =
+        process.env.AI_MODEL_API_URL || "http://localhost:5000/analyze_cv";
 
-      // const dataForAiModel = {
-      //   parseText: newCv.parseText,
-      //   appliedJob: newCv.appliedJob,
-      //   skills: newCv.skills,
-      //   experiences: newCv.experiences,
-      //   educations: newCv.educations,
-      //   jobTitle: newCv.jobTitle,
-      // };
+      const dataForAiModel = {
+        id: newCv.id, // ID CV yang baru dibuat
+        name: newCv.name, // Atau ambil dari newCv jika ada
+        parseText: newCv.parseText,
+        appliedJob: newCv.appliedJob,
+        skills: newCv.skills,
+        experiences: newCv.experiences,
+        educations: newCv.educations,
+        jobTitle: newCv.jobTitle,
+      };
 
-      // let updatedCv = { ...newCv };
+      let updatedCv = { ...newCv };
 
-      // try {
-      //   const aiResponse = await axios.post(aiModelApiUrl, dataForAiModel, {
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //     timeout: 60000,
-      //   });
+      try {
+        const aiResponse = await axios.post(aiModelApiUrl, dataForAiModel, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 60000,
+        });
 
-      //   if (aiResponse.status >= 200 && aiResponse.status < 300) {
-      //     const aiResult = aiResponse.data;
-      //     console.log("AI Model API Response:", aiResult);
+        if (aiResponse.status >= 200 && aiResponse.status < 300) {
+          const aiResult = aiResponse.data;
+          console.log("AI Model API Response:", aiResult);
 
-      //     updatedCv = await this.cvService.updateCvAnalysisResults(
-      //       newCv.id,
-      //       aiResult.matchScore,
-      //       aiResult.jobRecommendation,
-      //       aiResult.fixCv
-      //     );
+          updatedCv = await this.cvService.updateCvAnalysisResults(
+            newCv.id,
+            aiResult.matchScore,
+            aiResult.jobRecommendation,
+            aiResult.fixCv
+          );
 
-      //     console.log("CV updated with AI analysis results:", updatedCv.id);
-      //   } else {
-      //     console.error(
-      //       `Error from AI Model API (${aiResponse.status}):`,
-      //       aiResponse.data
-      //     );
-      //   }
-      // } catch (axiosError: any) {
-      //   if (axiosError.response) {
-      //     console.error(
-      //       `Axios Error (Response): ${
-      //         axiosError.response.status
-      //       } - ${JSON.stringify(axiosError.response.data)}`
-      //     );
-      //   } else if (axiosError.request) {
-      //     console.error(
-      //       "Axios Error (No Response): Request made but no response received."
-      //     );
-      //   } else {
-      //     console.error("Axios Error (Request Setup):", axiosError.message);
-      //   }
-      //   console.warn(
-      //     "AI model analysis failed. Returning CV data without AI analysis."
-      //   );
-      // }
+          console.log("CV updated with AI analysis results:", updatedCv.id);
+        } else {
+          console.error(
+            `Error from AI Model API (${aiResponse.status}):`,
+            aiResponse.data
+          );
+        }
+      } catch (axiosError: any) {
+        if (axiosError.response) {
+          console.error(
+            `Axios Error (Response): ${
+              axiosError.response.status
+            } - ${JSON.stringify(axiosError.response.data)}`
+          );
+        } else if (axiosError.request) {
+          console.error(
+            "Axios Error (No Response): Request made but no response received."
+          );
+        } else {
+          console.error("Axios Error (Request Setup):", axiosError.message);
+        }
+        console.warn(
+          "AI model analysis failed. Returning CV data without AI analysis."
+        );
+      }
 
       return res.status(201).json({
         success: true,
         message: "CV successfully uploaded and processed",
-        data: newCv,
+        data: updatedCv,
       });
     } catch (error) {
       console.error("Error in uploadAndSaveCv:", error);
