@@ -43,7 +43,7 @@ class CvController {
 
       // --- PANGGIL API MODEL AI DI SINI ---
       const aiModelApiUrl =
-        process.env.AI_MODEL_API_URL || "http://localhost:5000/analyze_cv";
+        process.env.AI_MODEL_API_URL || "https://01fc-2405-8180-a03-fbce-2dfc-6ab3-9366-4688.ngrok-free.app/analyze_cv";
 
       const dataForAiModel = {
         id: newCv.id, // ID CV yang baru dibuat
