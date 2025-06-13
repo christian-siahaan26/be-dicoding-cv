@@ -61,9 +61,9 @@ This project follows a clean and organized structure, ensuring maintainability a
 - `POST /api/auth/sign-in` - Log in an existing user
 - `GET /api/auth/authorize` - Authorize a user session
 
-### Notes
+### Predict Cv
 
-- `POST /api/cvs` - Create a new predict cv
+- `POST /api/cvs/upload` - Create a new predict cv
 
 ## Getting Started
 
@@ -77,7 +77,7 @@ This project follows a clean and organized structure, ensuring maintainability a
 1. Clone the repository:
 
 ```sh
-git clone https://github.com/tian0813/be-dicoding-cv.git
+git clone https://github.com/tian0813/be-dicoding-cv
 ```
 
 2. Navigate to the project directory:
