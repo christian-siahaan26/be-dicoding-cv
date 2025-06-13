@@ -1,4 +1,4 @@
-# Note App Backend
+# SmartRecruiter App Backend
 
 This is the backend for a note-taking application built with Express.js.
 
@@ -110,7 +110,7 @@ erDiagram
 
     CV {
         Int id
-        String appliedPosition
+        String appliedJob
         String name
         String jobTitle
         Object skills
